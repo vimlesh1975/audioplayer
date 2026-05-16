@@ -48,7 +48,9 @@ internal sealed class TimelineRulerControl : Control
         using var tickPen = new Pen(Color.FromArgb(210, 224, 232), 1.6f);
         using var minorTickPen = new Pen(Color.FromArgb(118, 137, 149), 1f);
         using var textBrush = new SolidBrush(ForeColor);
-        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
+        using var centerFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
+        using var leftFormat = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
+        using var rightFormat = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near };
 
         var totalSeconds = _duration.TotalSeconds;
         var tickSeconds = ChooseTickSeconds(totalSeconds);
@@ -61,9 +63,18 @@ internal sealed class TimelineRulerControl : Control
 
             if (major)
             {
-                g.DrawString(FormatRulerTime(TimeSpan.FromSeconds(seconds)), Font, textBrush, new RectangleF(x - 34, tickHeight + 3, 68, Height - tickHeight - 4), format);
+                var labelBounds = new RectangleF(x - 34, tickHeight + 3, 68, Height - tickHeight - 4);
+                if (labelBounds.Left > 48 && labelBounds.Right < Width - 48)
+                {
+                    g.DrawString(FormatRulerTime(TimeSpan.FromSeconds(seconds)), Font, textBrush, labelBounds, centerFormat);
+                }
             }
         }
+
+        var labelTop = 14f;
+        var labelHeight = Math.Max(12f, Height - labelTop - 1);
+        g.DrawString(FormatRulerTime(TimeSpan.Zero), Font, textBrush, new RectangleF(0, labelTop, 84, labelHeight), leftFormat);
+        g.DrawString(FormatRulerTime(_duration), Font, textBrush, new RectangleF(Width - 104, labelTop, 104, labelHeight), rightFormat);
     }
 
     private static double ChooseTickSeconds(double totalSeconds)
@@ -84,7 +95,7 @@ internal sealed class TimelineRulerControl : Control
     private static string FormatRulerTime(TimeSpan time)
     {
         return time.TotalHours >= 1
-            ? $"{(int)time.TotalHours}:{time.Minutes:00}"
-            : $"{(int)time.TotalMinutes}:00";
+            ? $"{(int)time.TotalHours}:{time.Minutes:00}:{time.Seconds:00}"
+            : $"{(int)time.TotalMinutes:00}:{time.Seconds:00}";
     }
 }
