@@ -9,8 +9,9 @@ internal sealed class TimelineRulerControl : Control
     public TimelineRulerControl()
     {
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(30, 35, 40);
-        ForeColor = Color.FromArgb(205, 215, 222);
+        BackColor = Color.FromArgb(12, 15, 18);
+        ForeColor = Color.FromArgb(242, 247, 250);
+        Font = new Font("Consolas", 9.5f, FontStyle.Bold);
         SetStyle(ControlStyles.ResizeRedraw | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
     }
 
@@ -44,7 +45,8 @@ internal sealed class TimelineRulerControl : Control
             return;
         }
 
-        using var tickPen = new Pen(Color.FromArgb(105, 119, 129));
+        using var tickPen = new Pen(Color.FromArgb(210, 224, 232), 1.6f);
+        using var minorTickPen = new Pen(Color.FromArgb(118, 137, 149), 1f);
         using var textBrush = new SolidBrush(ForeColor);
         using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
 
@@ -54,8 +56,8 @@ internal sealed class TimelineRulerControl : Control
         {
             var x = (float)(seconds / totalSeconds * (Width - 1));
             var major = Math.Abs(seconds % 60) < 0.001 || tickSeconds >= 60;
-            var tickHeight = major ? 10 : 6;
-            g.DrawLine(tickPen, x, 0, x, tickHeight);
+            var tickHeight = major ? 12 : 7;
+            g.DrawLine(major ? tickPen : minorTickPen, x, 0, x, tickHeight);
 
             if (major)
             {

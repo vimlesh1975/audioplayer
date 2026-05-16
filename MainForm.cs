@@ -411,7 +411,7 @@ internal sealed class MainForm : Form
         previewFrame.Controls.Add(_volumeBar, 3, 0);
 
         _timelineRuler.Dock = DockStyle.Fill;
-        _timelineRuler.Margin = new Padding(42, 0, 106, 0);
+        _timelineRuler.Margin = new Padding(42, 0, 108, 0);
         previewStack.Controls.Add(_timelineRuler, 0, 1);
 
         _largeTimeLabel.Dock = DockStyle.Fill;
