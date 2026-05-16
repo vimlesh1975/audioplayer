@@ -11,7 +11,7 @@ internal sealed class MainForm : Form
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");
     private static readonly string[] AudioExtensions =
     [
-        ".wav", ".mp3", ".aiff", ".aif", ".wma", ".aac", ".m4a", ".mp4", ".flac"
+        ".wav", ".mp3", ".mpeg", ".mpg", ".mp2", ".aiff", ".aif", ".wma", ".aac", ".m4a", ".mp4", ".flac"
     ];
     private const int StartupPlaylistSeedCount = 10;
 
