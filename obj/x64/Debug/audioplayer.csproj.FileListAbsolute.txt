@@ -21,3 +21,4 @@ C:\Users\vimlesh\Desktop\audioplayer\obj\x64\Debug\refint\audioplayer.dll
 C:\Users\vimlesh\Desktop\audioplayer\obj\x64\Debug\audioplayer.pdb
 C:\Users\vimlesh\Desktop\audioplayer\obj\x64\Debug\audioplayer.genruntimeconfig.cache
 C:\Users\vimlesh\Desktop\audioplayer\obj\x64\Debug\ref\audioplayer.dll
+C:\Users\vimlesh\Desktop\audioplayer\obj\x64\Debug\audioplayer.sourcelink.json
