@@ -55,6 +55,7 @@ internal sealed class MainForm : Form
     private readonly Button _stopButton = new();
     private readonly Label _appTitleLabel = new();
     private readonly Label _headerStatusLabel = new();
+    private readonly Label _modeLabel = new();
     private readonly Label _systemLabel = new();
     private readonly CheckBox _darkModeSwitch = new();
     private readonly Label _fileLabel = new();
@@ -64,10 +65,14 @@ internal sealed class MainForm : Form
     private readonly Label _scrubDurationLabel = new();
     private readonly Label _statusLabel = new();
     private readonly Label _clipCountLabel = new();
+    private readonly Label _speedLabel = new();
+    private readonly TrackBar _speedTrackBar = new();
+    private readonly Button _resetSpeedButton = new();
     private readonly ComboBox _audioDeviceBox = new();
     private readonly AudioMeterBar _leftMeter = new();
     private readonly AudioMeterBar _rightMeter = new();
     private readonly VerticalVolumeBar _volumeBar = new();
+    private readonly Button _resetVolumeButton = new();
     private readonly WaveformControl _waveform = new();
     private readonly TimelineRulerControl _timelineRuler = new();
     private readonly System.Windows.Forms.Timer _positionTimer = new();
@@ -81,6 +86,8 @@ internal sealed class MainForm : Form
     private IWavePlayer? _output;
     private MeteringSampleProvider? _meteringProvider;
     private VolumeSampleProvider? _volumeProvider;
+    private SpeedSampleProvider? _speedProvider;
+    private CancellationTokenSource? _waveformLoadCancellation;
     private string? _mediaRoot;
     private string? _currentFolder;
     private string? _currentFile;
@@ -119,6 +126,8 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _waveformLoadCancellation?.Cancel();
+        _waveformLoadCancellation?.Dispose();
         SaveAppSettings();
         CleanupPlayback();
         base.OnFormClosed(e);
@@ -173,11 +182,12 @@ internal sealed class MainForm : Form
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 6,
+            ColumnCount = 7,
             BackColor = BackColor,
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 290));
@@ -193,6 +203,14 @@ internal sealed class MainForm : Form
         _headerStatusLabel.Dock = DockStyle.Fill;
         _headerStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
         _headerStatusLabel.ForeColor = Color.FromArgb(112, 231, 166);
+
+        _modeLabel.Text = "MANUAL MODE";
+        _modeLabel.Dock = DockStyle.Fill;
+        _modeLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _modeLabel.Font = new Font(Font.FontFamily, 10f, FontStyle.Bold);
+        _modeLabel.Margin = new Padding(6, 14, 10, 14);
+        _modeLabel.ForeColor = Color.White;
+        _modeLabel.BackColor = Color.FromArgb(58, 88, 122);
 
         _systemLabel.Text = "PC AUDIO";
         _systemLabel.Dock = DockStyle.Fill;
@@ -214,10 +232,11 @@ internal sealed class MainForm : Form
 
         header.Controls.Add(_appTitleLabel, 0, 0);
         header.Controls.Add(_headerStatusLabel, 1, 0);
-        header.Controls.Add(_systemLabel, 2, 0);
-        header.Controls.Add(MakeFieldLabel("Audio Device"), 3, 0);
-        header.Controls.Add(_audioDeviceBox, 4, 0);
-        header.Controls.Add(_darkModeSwitch, 5, 0);
+        header.Controls.Add(_modeLabel, 2, 0);
+        header.Controls.Add(_systemLabel, 3, 0);
+        header.Controls.Add(MakeFieldLabel("Audio Device"), 4, 0);
+        header.Controls.Add(_audioDeviceBox, 5, 0);
+        header.Controls.Add(_darkModeSwitch, 6, 0);
         return header;
     }
 
@@ -299,14 +318,18 @@ internal sealed class MainForm : Form
         clipPanel.Controls.Add(_clipGrid, 0, 0);
 
         var transport = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-        ConfigureButton(_cuePreviousClipButton, "Cue Prev", 82, ButtonRole.Primary);
-        ConfigureButton(_playPreviousClipButton, "Play Prev", 86, ButtonRole.Primary);
-        ConfigureButton(_cueClipButton, "Cue", 58);
-        ConfigureButton(_playClipButton, "Play", 62, ButtonRole.Primary);
-        ConfigureButton(_clipPauseButton, "Pause", 76, ButtonRole.Warning);
-        ConfigureButton(_clipStopButton, "Stop", 64, ButtonRole.Danger);
-        ConfigureButton(_cueNextClipButton, "Cue Next", 90, ButtonRole.Primary);
-        ConfigureButton(_playNextClipButton, "Play Next", 96, ButtonRole.Primary);
+        ConfigureButton(_cuePreviousClipButton, "Cue Prev", 72, ButtonRole.Primary);
+        ConfigureButton(_playPreviousClipButton, "Play Prev", 76, ButtonRole.Primary);
+        ConfigureButton(_cueClipButton, "Cue", 48);
+        ConfigureButton(_playClipButton, "Play", 52, ButtonRole.Primary);
+        ConfigureButton(_clipPauseButton, "Pause", 62, ButtonRole.Warning);
+        ConfigureButton(_clipStopButton, "Stop", 54, ButtonRole.Danger);
+        ConfigureButton(_cueNextClipButton, "Cue Next", 78, ButtonRole.Primary);
+        ConfigureButton(_playNextClipButton, "Play Next", 84, ButtonRole.Primary);
+        foreach (var button in new[] { _cuePreviousClipButton, _playPreviousClipButton, _cueClipButton, _playClipButton, _clipPauseButton, _clipStopButton, _cueNextClipButton, _playNextClipButton })
+        {
+            button.Margin = new Padding(0, 4, 4, 4);
+        }
         transport.Controls.AddRange([_cuePreviousClipButton, _playPreviousClipButton, _cueClipButton, _playClipButton, _clipPauseButton, _clipStopButton, _cueNextClipButton, _playNextClipButton]);
         clipPanel.Controls.Add(transport, 0, 1);
 
@@ -357,7 +380,7 @@ internal sealed class MainForm : Form
             Name = "Loop",
             HeaderText = "Loop",
             Width = 46,
-            ReadOnly = true,
+            ReadOnly = false,
             SortMode = DataGridViewColumnSortMode.NotSortable,
         });
         panel.Controls.Add(_playlistGrid, 0, 2);
@@ -378,8 +401,8 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 144));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 164));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var previewHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.FromArgb(34, 40, 46) };
         previewHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
@@ -410,7 +433,7 @@ internal sealed class MainForm : Form
         previewFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
         previewFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         previewFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
-        previewFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+        previewFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
         previewStack.Controls.Add(previewFrame, 0, 0);
 
         ConfigureMeter(_leftMeter);
@@ -420,9 +443,22 @@ internal sealed class MainForm : Form
         _waveform.Margin = new Padding(0);
         previewFrame.Controls.Add(_waveform, 1, 0);
         previewFrame.Controls.Add(_rightMeter, 2, 0);
+        var volumeStack = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = new Padding(8, 0, 0, 0), BackColor = Color.Black };
+        volumeStack.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        volumeStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         _volumeBar.Dock = DockStyle.Fill;
-        _volumeBar.Margin = new Padding(8, 0, 0, 0);
-        previewFrame.Controls.Add(_volumeBar, 3, 0);
+        _volumeBar.Margin = new Padding(0);
+        volumeStack.Controls.Add(_volumeBar, 0, 0);
+        ConfigureButton(_resetVolumeButton, "1", 42);
+        _resetVolumeButton.Dock = DockStyle.Fill;
+        _resetVolumeButton.Height = 26;
+        _resetVolumeButton.MinimumSize = Size.Empty;
+        _resetVolumeButton.Padding = new Padding(0);
+        _resetVolumeButton.Font = new Font(Font.FontFamily, 8.5f, FontStyle.Bold);
+        _resetVolumeButton.TextAlign = ContentAlignment.MiddleCenter;
+        _resetVolumeButton.Margin = new Padding(0, 2, 0, 0);
+        volumeStack.Controls.Add(_resetVolumeButton, 0, 1);
+        previewFrame.Controls.Add(volumeStack, 3, 0);
 
         _timelineRuler.Dock = DockStyle.Fill;
         _timelineRuler.Margin = new Padding(42, 0, 108, 0);
@@ -435,9 +471,10 @@ internal sealed class MainForm : Form
         _largeTimeLabel.Margin = new Padding(0, 4, 0, 4);
         root.Controls.Add(_largeTimeLabel, 0, 2);
 
-        var transport = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Padding = new Padding(0, 6, 0, 0), Margin = new Padding(0, 2, 0, 8) };
+        var transport = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(0, 6, 0, 0), Margin = new Padding(0, 2, 0, 8) };
         transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         root.Controls.Add(transport, 0, 3);
 
         var scrubRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
@@ -479,6 +516,67 @@ internal sealed class MainForm : Form
             _cueNextPlaylistButton,
         ]);
         transport.Controls.Add(controls, 0, 1);
+
+        var speedRow = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 1, ColumnCount = 6, BackColor = Color.FromArgb(30, 35, 40), Padding = new Padding(0, 8, 0, 0), Margin = new Padding(0) };
+        speedRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var speedTitle = new Label { Text = "Speed", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(233, 238, 241), Margin = new Padding(0, 0, 8, 10) };
+        var speedStack = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.FromArgb(30, 35, 40) };
+        speedStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        speedStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        _speedTrackBar.Dock = DockStyle.Fill;
+        _speedTrackBar.Minimum = 50;
+        _speedTrackBar.Maximum = 200;
+        _speedTrackBar.TickFrequency = 25;
+        _speedTrackBar.SmallChange = 5;
+        _speedTrackBar.LargeChange = 25;
+        _speedTrackBar.Value = 100;
+        _speedTrackBar.Margin = new Padding(0, 0, 0, 0);
+        var speedTicks = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, Margin = new Padding(2, 0, 2, 0), Padding = new Padding(0) };
+        for (var i = 0; i < 7; i++)
+        {
+            speedTicks.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 7f));
+        }
+
+        foreach (var value in new[] { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" })
+        {
+            speedTicks.Controls.Add(new Label
+            {
+                Text = value,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.TopCenter,
+                Font = new Font(Font.FontFamily, 7f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(172, 183, 190),
+                Margin = new Padding(0),
+            });
+        }
+
+        speedStack.Controls.Add(_speedTrackBar, 0, 0);
+        speedStack.Controls.Add(speedTicks, 0, 1);
+        _speedLabel.Text = "1.00x";
+        _speedLabel.Dock = DockStyle.Fill;
+        _speedLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _speedLabel.Font = new Font(Font.FontFamily, 9f, FontStyle.Bold);
+        _speedLabel.ForeColor = Color.FromArgb(233, 238, 241);
+        _speedLabel.Margin = new Padding(0, 0, 0, 10);
+        ConfigureButton(_resetSpeedButton, "1x", 42);
+        _resetSpeedButton.Dock = DockStyle.None;
+        _resetSpeedButton.Anchor = AnchorStyles.None;
+        _resetSpeedButton.Height = 26;
+        _resetSpeedButton.Width = 42;
+        _resetSpeedButton.Margin = new Padding(0, 2, 0, 4);
+        _resetSpeedButton.Font = new Font(Font.FontFamily, 8.5f, FontStyle.Bold);
+        _resetSpeedButton.TextAlign = ContentAlignment.MiddleCenter;
+        speedRow.Controls.Add(speedTitle, 1, 0);
+        speedRow.Controls.Add(speedStack, 2, 0);
+        speedRow.Controls.Add(_speedLabel, 3, 0);
+        speedRow.Controls.Add(_resetSpeedButton, 4, 0);
+        transport.Controls.Add(speedRow, 0, 2);
 
         root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(30, 35, 40) }, 0, 4);
 
@@ -547,6 +645,9 @@ internal sealed class MainForm : Form
         _seekBackOneButton.Click += (_, _) => SeekRelative(TimeSpan.FromSeconds(-1));
         _seekForwardOneButton.Click += (_, _) => SeekRelative(TimeSpan.FromSeconds(1));
         _seekForwardFiveButton.Click += (_, _) => SeekRelative(TimeSpan.FromSeconds(5));
+        _resetVolumeButton.Click += (_, _) => _volumeBar.Value = 1f;
+        _speedTrackBar.ValueChanged += (_, _) => ApplyPlaybackSpeed();
+        _resetSpeedButton.Click += (_, _) => _speedTrackBar.Value = 100;
         _waveform.SeekRequested += (_, progress) => SeekToProgress(progress);
 
         _positionTimer.Interval = 100;
@@ -614,8 +715,12 @@ internal sealed class MainForm : Form
         _toolTip.SetToolTip(_seekForwardFiveButton, "Seek forward 5 seconds.");
         _toolTip.SetToolTip(_playNextPlaylistButton, "Play the next playable playlist row.");
         _toolTip.SetToolTip(_cueNextPlaylistButton, "Cue the next playable playlist row without playing.");
+        _toolTip.SetToolTip(_modeLabel, "Shows whether the player is in playlist mode or manual mode.");
         _toolTip.SetToolTip(_audioDeviceBox, "Select the PC audio output device.");
         _toolTip.SetToolTip(_volumeBar, "Set playback volume from 0.00 to 5.00. Default is 1.00.");
+        _toolTip.SetToolTip(_resetVolumeButton, "Reset volume to 1.00.");
+        _toolTip.SetToolTip(_speedTrackBar, "Set playback speed from 0.50x to 2.00x.");
+        _toolTip.SetToolTip(_resetSpeedButton, "Reset playback speed to 1.00x.");
         _toolTip.SetToolTip(_darkModeSwitch, "Keep the app in dark mode.");
     }
 
@@ -869,7 +974,7 @@ internal sealed class MainForm : Form
 
     private void PlaylistGridCellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _playlistGrid.Columns[e.ColumnIndex].Name == "Play")
+        if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _playlistGrid.Columns[e.ColumnIndex].Name is "Play" or "Loop")
         {
             _playlistGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         }
@@ -877,7 +982,7 @@ internal sealed class MainForm : Form
 
     private void PlaylistGridCurrentCellDirtyStateChanged(object? sender, EventArgs e)
     {
-        if (_playlistGrid.IsCurrentCellDirty && _playlistGrid.CurrentCell?.OwningColumn?.Name == "Play")
+        if (_playlistGrid.IsCurrentCellDirty && _playlistGrid.CurrentCell?.OwningColumn?.Name is "Play" or "Loop")
         {
             _playlistGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         }
@@ -885,12 +990,25 @@ internal sealed class MainForm : Form
 
     private void PlaylistGridCellValueChanged(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _playlist.Count || _playlistGrid.Columns[e.ColumnIndex].Name != "Play")
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _playlist.Count)
         {
             return;
         }
 
-        _playlist[e.RowIndex].PlayEnabled = Convert.ToBoolean(_playlistGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);
+        var columnName = _playlistGrid.Columns[e.ColumnIndex].Name;
+        if (columnName == "Play")
+        {
+            _playlist[e.RowIndex].PlayEnabled = Convert.ToBoolean(_playlistGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);
+        }
+        else if (columnName == "Loop")
+        {
+            _playlist[e.RowIndex].LoopEnabled = Convert.ToBoolean(_playlistGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);
+        }
+        else
+        {
+            return;
+        }
+
         RefreshPlaylistGrid(e.RowIndex);
     }
 
@@ -1059,6 +1177,7 @@ internal sealed class MainForm : Form
             _playlist.Add(new PlaylistItem(item.Path)
             {
                 PlayEnabled = item.PlayEnabled,
+                LoopEnabled = item.LoopEnabled,
                 StartTimeOverride = TryParsePlaylistTime(item.StartTime, out var startTime) ? startTime : null,
             });
         }
@@ -1138,6 +1257,7 @@ internal sealed class MainForm : Form
                 {
                     Path = item.Path,
                     PlayEnabled = item.PlayEnabled,
+                    LoopEnabled = item.LoopEnabled,
                     StartTime = item.StartTimeOverride.HasValue ? FormatPlaylistTime(item.StartTimeOverride.Value) : null,
                 }).ToList(),
             };
@@ -1216,6 +1336,11 @@ internal sealed class MainForm : Form
         foreach (var file in files)
         {
             var metadata = ReadAudioMetadata(file);
+            if (!metadata.HasAudio)
+            {
+                continue;
+            }
+
             var rowIndex = _clipGrid.Rows.Add(
                 Path.GetFileName(file),
                 metadata.Duration,
@@ -1260,6 +1385,12 @@ internal sealed class MainForm : Form
 
         insertIndex = Math.Clamp(insertIndex, 0, _playlist.Count);
         _playlist.InsertRange(insertIndex, audioPaths.Select(path => new PlaylistItem(path)));
+
+        if (_currentPlaylistIndex >= insertIndex)
+        {
+            _currentPlaylistIndex += audioPaths.Length;
+        }
+
         RefreshPlaylistGrid(insertIndex);
         SetStatus(audioPaths.Length == 1 ? "Added to playlist" : $"{audioPaths.Length} clips added to playlist");
     }
@@ -1385,6 +1516,7 @@ internal sealed class MainForm : Form
 
         _currentPlaylistIndex = index.Value;
         LoadFile(_playlist[index.Value].Path, autoPlay: true);
+        MarkPlaylistRowStarted(index.Value);
         RefreshPlaylistGrid(index.Value);
     }
 
@@ -1411,6 +1543,7 @@ internal sealed class MainForm : Form
 
         _currentPlaylistIndex = index.Value;
         LoadFile(_playlist[index.Value].Path, autoPlay: true);
+        MarkPlaylistRowStarted(index.Value);
         RefreshPlaylistGrid(index.Value);
     }
 
@@ -1439,6 +1572,20 @@ internal sealed class MainForm : Form
         SetStatus("Playlist mode stopped");
         RefreshPlaylistGrid(_currentPlaylistIndex >= 0 ? _currentPlaylistIndex : null);
         UpdateTransportState();
+    }
+
+    private void MarkPlaylistRowStarted(int index)
+    {
+        if (index < 0 || index >= _playlist.Count || _reader is null || _output is null)
+        {
+            return;
+        }
+
+        _playlist[index].StartTimeOverride = DateTime.Now.TimeOfDay;
+        for (var i = index + 1; i < _playlist.Count; i++)
+        {
+            _playlist[i].StartTimeOverride = null;
+        }
     }
 
     private int? FindRelativePlaylistIndex(int direction)
@@ -1813,6 +1960,7 @@ internal sealed class MainForm : Form
         _playlist.AddRange(items.Where(item => !string.IsNullOrWhiteSpace(item.Path)).Select(item => new PlaylistItem(item.Path)
         {
             PlayEnabled = item.PlayEnabled,
+            LoopEnabled = item.LoopEnabled,
             StartTimeOverride = TryParsePlaylistTime(item.StartTime, out var startTime) ? startTime : null,
         }));
         _playlistPlaybackActive = false;
@@ -1840,6 +1988,7 @@ internal sealed class MainForm : Form
         {
             Path = item.Path,
             PlayEnabled = item.PlayEnabled,
+            LoopEnabled = item.LoopEnabled,
             StartTime = item.StartTimeOverride.HasValue ? FormatPlaylistTime(item.StartTimeOverride.Value) : null,
         }).ToList();
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
@@ -1850,9 +1999,12 @@ internal sealed class MainForm : Form
     {
         try
         {
+            _waveformLoadCancellation?.Cancel();
+            _waveformLoadCancellation?.Dispose();
+            _waveformLoadCancellation = null;
             CleanupPlayback();
-            SetStatus("Loading waveform...");
-            Application.DoEvents();
+            SetStatus("Loading file...");
+            _waveform.Clear("Loading graph...");
 
             _reader = new AudioFileReader(path);
             _output = CreateAudioOutput();
@@ -1862,8 +2014,6 @@ internal sealed class MainForm : Form
             _currentFile = path;
             _fileLabel.Text = Path.GetFileName(path);
             _toolTip.SetToolTip(_fileLabel, path);
-            _waveform.SetPeaks(WaveformAnalyzer.CreatePeaks(path, Math.Max(1200, _waveform.Width * 2)));
-            SetStatus("Loaded");
 
             RefreshPosition();
             UpdateTransportState();
@@ -1872,9 +2022,15 @@ internal sealed class MainForm : Form
             {
                 _output.Play();
                 _positionTimer.Start();
-                SetStatus("Playing");
+                SetStatus("Playing, graph loading...");
                 UpdateTransportState();
             }
+            else
+            {
+                SetStatus("Loaded, graph loading...");
+            }
+
+            StartWaveformLoad(path);
         }
         catch (Exception ex)
         {
@@ -1882,6 +2038,53 @@ internal sealed class MainForm : Form
             SetStatus("Could not open file");
             MessageBox.Show(this, ex.Message, "AudioPlayer", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void StartWaveformLoad(string path)
+    {
+        var cancellation = new CancellationTokenSource();
+        _waveformLoadCancellation = cancellation;
+        var token = cancellation.Token;
+        var targetPeaks = Math.Max(1200, _waveform.Width * 2);
+
+        _ = Task.Run(() => WaveformAnalyzer.CreatePeaks(path, targetPeaks, token), token)
+            .ContinueWith(task =>
+            {
+                if (IsDisposed || !IsHandleCreated)
+                {
+                    cancellation.Dispose();
+                    return;
+                }
+
+                BeginInvoke(() =>
+                {
+                    if (_waveformLoadCancellation != cancellation)
+                    {
+                        cancellation.Dispose();
+                        return;
+                    }
+
+                    _waveformLoadCancellation = null;
+                    cancellation.Dispose();
+
+                    if (token.IsCancellationRequested || !string.Equals(_currentFile, path, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    if (task.Status == TaskStatus.RanToCompletion)
+                    {
+                        _waveform.SetPeaks(task.Result, resetProgress: false);
+                        RefreshPosition();
+                        SetStatus(_output?.PlaybackState == PlaybackState.Playing ? "Playing" : "Loaded");
+                    }
+                    else if (task.Exception is not null)
+                    {
+                        _waveform.Clear("Graph unavailable");
+                        SetStatus(_output?.PlaybackState == PlaybackState.Playing ? "Playing, graph unavailable" : "Graph unavailable");
+                    }
+                });
+            }, CancellationToken.None);
     }
 
     private IWavePlayer CreateAudioOutput()
@@ -1897,13 +2100,32 @@ internal sealed class MainForm : Form
 
     private ISampleProvider CreateMeteredSampleProvider(AudioFileReader reader)
     {
-        _volumeProvider = new VolumeSampleProvider(reader)
+        _speedProvider = new SpeedSampleProvider(reader)
+        {
+            Speed = GetPlaybackSpeed(),
+        };
+        _volumeProvider = new VolumeSampleProvider(_speedProvider)
         {
             Volume = _volumeBar.Value,
         };
         _meteringProvider = new MeteringSampleProvider(_volumeProvider, 1024);
         _meteringProvider.StreamVolume += MeteringProviderStreamVolume;
         return _meteringProvider;
+    }
+
+    private float GetPlaybackSpeed()
+    {
+        return Math.Clamp(_speedTrackBar.Value / 100f, 0.5f, 2f);
+    }
+
+    private void ApplyPlaybackSpeed()
+    {
+        var speed = GetPlaybackSpeed();
+        SetLabelText(_speedLabel, $"{speed:0.00}x");
+        if (_speedProvider is not null)
+        {
+            _speedProvider.Speed = speed;
+        }
     }
 
     private void MeteringProviderStreamVolume(object? sender, StreamVolumeEventArgs e)
@@ -1933,6 +2155,14 @@ internal sealed class MainForm : Form
         _reader.CurrentTime = TimeSpan.Zero;
         _output.Play();
         _positionTimer.Start();
+        if (_currentPlaylistIndex >= 0 &&
+            _currentPlaylistIndex < _playlist.Count &&
+            string.Equals(_playlist[_currentPlaylistIndex].Path, _currentFile, StringComparison.OrdinalIgnoreCase))
+        {
+            MarkPlaylistRowStarted(_currentPlaylistIndex);
+            RefreshPlaylistGrid(_currentPlaylistIndex);
+        }
+
         SetStatus("Playing");
         RefreshPosition();
         UpdateTransportState();
@@ -2001,6 +2231,7 @@ internal sealed class MainForm : Form
         }
 
         _reader.CurrentTime = target;
+        _speedProvider?.Reset();
         RefreshPosition();
     }
 
@@ -2014,10 +2245,11 @@ internal sealed class MainForm : Form
         _seekingFromWaveform = true;
         try
         {
-            var targetTicks = (long)(_reader.TotalTime.Ticks * Math.Clamp(progress, 0, 1));
-            _reader.CurrentTime = TimeSpan.FromTicks(targetTicks);
-            RefreshPosition();
-        }
+        var targetTicks = (long)(_reader.TotalTime.Ticks * Math.Clamp(progress, 0, 1));
+        _reader.CurrentTime = TimeSpan.FromTicks(targetTicks);
+        _speedProvider?.Reset();
+        RefreshPosition();
+    }
         finally
         {
             _seekingFromWaveform = false;
@@ -2070,6 +2302,11 @@ internal sealed class MainForm : Form
         if (endedNaturally)
         {
             _reader.Position = 0;
+            if (LoopCurrentPlaylistItem())
+            {
+                return;
+            }
+
             if (_playlistPlaybackActive && PlayNextPlaylistItem())
             {
                 return;
@@ -2083,6 +2320,24 @@ internal sealed class MainForm : Form
         UpdateTransportState();
     }
 
+    private bool LoopCurrentPlaylistItem()
+    {
+        if (_currentPlaylistIndex < 0 ||
+            _currentPlaylistIndex >= _playlist.Count ||
+            !_playlist[_currentPlaylistIndex].LoopEnabled ||
+            !_playlist[_currentPlaylistIndex].PlayEnabled ||
+            !File.Exists(_playlist[_currentPlaylistIndex].Path))
+        {
+            return false;
+        }
+
+        LoadFile(_playlist[_currentPlaylistIndex].Path, autoPlay: true);
+        MarkPlaylistRowStarted(_currentPlaylistIndex);
+        RefreshPlaylistGrid(_currentPlaylistIndex);
+        SetStatus("Looping playlist row");
+        return true;
+    }
+
     private bool PlayNextPlaylistItem()
     {
         var next = _currentPlaylistIndex + 1;
@@ -2093,6 +2348,7 @@ internal sealed class MainForm : Form
                 _playlistPlaybackActive = true;
                 _currentPlaylistIndex = next;
                 LoadFile(_playlist[next].Path, autoPlay: true);
+                MarkPlaylistRowStarted(next);
                 RefreshPlaylistGrid(next);
                 return true;
             }
@@ -2149,7 +2405,7 @@ internal sealed class MainForm : Form
                         ? "NEXT"
                         : "READY";
             var duration = ReadDurationText(item.Path);
-            var rowIndex = _playlistGrid.Rows.Add(i + 1, FormatPlaylistTime(startTime), item.PlayEnabled, Path.GetFileName(item.Path), duration, false);
+            var rowIndex = _playlistGrid.Rows.Add(i + 1, FormatPlaylistTime(startTime), item.PlayEnabled, Path.GetFileName(item.Path), duration, item.LoopEnabled);
             _playlistGrid.Rows[rowIndex].Tag = item.Path;
             ApplyPlaylistRowStyle(_playlistGrid.Rows[rowIndex], status, _darkModeSwitch.Checked);
 
@@ -2179,6 +2435,7 @@ internal sealed class MainForm : Form
         var hasPlaylistSelection = playlistIndex.HasValue && playlistIndex.Value >= 0 && playlistIndex.Value < _playlist.Count;
         var selectedPlaylistPlayable = hasPlaylistSelection && _playlist[playlistIndex!.Value].PlayEnabled;
         _startPlaylistButton.Text = _playlistPlaybackActive ? "Playlist ON" : "Start Playlist";
+        UpdateModeIndicator();
         _mainPlayButton.Text = "Play";
         _mainPauseResumeButton.Text = hasFile && _output?.PlaybackState == PlaybackState.Playing ? "Pause" : "Resume";
         _clipPauseButton.Text = hasFile && _output?.PlaybackState == PlaybackState.Playing ? "Pause" : "Resume";
@@ -2211,6 +2468,23 @@ internal sealed class MainForm : Form
         _setPlaylistStartTimeButton.Enabled = hasPlaylistSelection;
         _clearPlaylistButton.Enabled = _playlist.Count > 0;
         _savePlaylistButton.Enabled = _playlist.Count > 0;
+    }
+
+    private void UpdateModeIndicator()
+    {
+        var dark = _darkModeSwitch.Checked;
+        if (_playlistPlaybackActive)
+        {
+            SetLabelText(_modeLabel, "PLAYLIST MODE");
+            _modeLabel.BackColor = dark ? Color.FromArgb(38, 132, 89) : Color.FromArgb(25, 145, 91);
+        }
+        else
+        {
+            SetLabelText(_modeLabel, "MANUAL MODE");
+            _modeLabel.BackColor = dark ? Color.FromArgb(58, 88, 122) : Color.FromArgb(58, 121, 184);
+        }
+
+        _modeLabel.ForeColor = Color.White;
     }
 
     private string? GetSelectedClipPath()
@@ -2251,6 +2525,7 @@ internal sealed class MainForm : Form
             _meteringProvider = null;
         }
         _volumeProvider = null;
+        _speedProvider = null;
 
         _reader?.Dispose();
         _reader = null;
@@ -2440,6 +2715,7 @@ internal sealed class MainForm : Form
         ApplyGridTheme(_playlistGrid, dark);
         _headerStatusLabel.ForeColor = dark ? Color.FromArgb(112, 231, 166) : Color.FromArgb(24, 128, 77);
         _systemLabel.ForeColor = dark ? Color.FromArgb(137, 239, 194) : Color.FromArgb(24, 128, 77);
+        UpdateModeIndicator();
         _fileLabel.ForeColor = muted;
         _statusLabel.ForeColor = muted;
         _clipCountLabel.ForeColor = dark ? Color.FromArgb(166, 214, 245) : Color.FromArgb(24, 101, 164);
@@ -2589,21 +2865,39 @@ internal sealed class MainForm : Form
     {
         row.DefaultCellStyle.BackColor = (status, dark) switch
         {
-            ("PLAYING", true) => Color.FromArgb(32, 113, 73),
-            ("NEXT", true) => Color.FromArgb(125, 45, 45),
             ("MISSING", true) => Color.FromArgb(78, 41, 35),
             ("SKIPPED", true) => Color.FromArgb(45, 49, 53),
-            ("PLAYING", false) => Color.FromArgb(204, 239, 219),
-            ("NEXT", false) => Color.FromArgb(255, 214, 214),
             ("MISSING", false) => Color.FromArgb(255, 224, 210),
             ("SKIPPED", false) => Color.FromArgb(226, 230, 234),
             _ => dark
                 ? row.Index % 2 == 0 ? Color.FromArgb(22, 26, 30) : Color.FromArgb(26, 30, 35)
                 : row.Index % 2 == 0 ? Color.White : Color.FromArgb(240, 244, 247),
         };
-        row.DefaultCellStyle.ForeColor = status == "PLAYING" && dark ? Color.White : dark ? Color.FromArgb(231, 236, 239) : Color.FromArgb(25, 31, 36);
+        row.DefaultCellStyle.ForeColor = dark ? Color.FromArgb(231, 236, 239) : Color.FromArgb(25, 31, 36);
         row.DefaultCellStyle.SelectionBackColor = dark ? Color.FromArgb(58, 89, 118) : Color.FromArgb(58, 121, 184);
         row.DefaultCellStyle.SelectionForeColor = Color.White;
+
+        if (row.DataGridView?.Columns.Contains("Name") == true)
+        {
+            var nameCell = row.Cells["Name"];
+            nameCell.Style.BackColor = status switch
+            {
+                "PLAYING" => dark ? Color.FromArgb(32, 113, 73) : Color.FromArgb(204, 239, 219),
+                "NEXT" => dark ? Color.FromArgb(125, 45, 45) : Color.FromArgb(255, 214, 214),
+                _ => row.DefaultCellStyle.BackColor,
+            };
+            nameCell.Style.ForeColor = status == "PLAYING" && dark ? Color.White : row.DefaultCellStyle.ForeColor;
+            if (status is "PLAYING" or "NEXT")
+            {
+                nameCell.Style.SelectionBackColor = nameCell.Style.BackColor;
+                nameCell.Style.SelectionForeColor = nameCell.Style.ForeColor;
+            }
+            else
+            {
+                nameCell.Style.SelectionBackColor = row.DefaultCellStyle.SelectionBackColor;
+                nameCell.Style.SelectionForeColor = Color.White;
+            }
+        }
     }
 
     private static bool HasSubdirectories(string path)
@@ -2676,17 +2970,20 @@ internal sealed class MainForm : Form
     {
         if (!File.Exists(path))
         {
-            return new AudioMetadata("--", "--");
+            return new AudioMetadata("--", "--", false);
         }
 
         try
         {
             using var reader = new AudioFileReader(path);
-            return new AudioMetadata(FormatTime(reader.TotalTime), reader.WaveFormat.Channels.ToString());
+            var channels = reader.WaveFormat.Channels;
+            return channels > 0
+                ? new AudioMetadata(FormatTime(reader.TotalTime), channels.ToString(), true)
+                : new AudioMetadata("--", "--", false);
         }
         catch
         {
-            return new AudioMetadata("--", "--");
+            return new AudioMetadata("--", "--", false);
         }
     }
 
@@ -2763,6 +3060,8 @@ internal sealed class MainForm : Form
 
         public bool PlayEnabled { get; set; } = true;
 
+        public bool LoopEnabled { get; set; }
+
         public TimeSpan? StartTimeOverride { get; set; }
     }
 
@@ -2771,6 +3070,8 @@ internal sealed class MainForm : Form
         public string Path { get; set; } = "";
 
         public bool PlayEnabled { get; set; } = true;
+
+        public bool LoopEnabled { get; set; }
 
         public string? StartTime { get; set; }
     }
@@ -2792,7 +3093,7 @@ internal sealed class MainForm : Form
         public List<PlaylistFileItem> Playlist { get; set; } = [];
     }
 
-    private sealed record AudioMetadata(string Duration, string Channels);
+    private sealed record AudioMetadata(string Duration, string Channels, bool HasAudio);
 
     private sealed record AudioDeviceItem(string? DeviceId, string Name)
     {
@@ -2813,7 +3114,7 @@ internal sealed class MainForm : Form
 
     private static class WaveformAnalyzer
     {
-        public static float[] CreatePeaks(string path, int targetPeaks)
+        public static float[] CreatePeaks(string path, int targetPeaks, CancellationToken cancellationToken = default)
         {
             using var reader = new AudioFileReader(path);
             var channels = Math.Max(1, reader.WaveFormat.Channels);
@@ -2825,6 +3126,7 @@ internal sealed class MainForm : Form
 
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var read = reader.Read(buffer, 0, buffer.Length);
                 if (read <= 0)
                 {

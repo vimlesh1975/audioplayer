@@ -53,7 +53,7 @@ internal sealed class TimelineRulerControl : Control
         using var rightFormat = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near };
 
         var totalSeconds = _duration.TotalSeconds;
-        var tickSeconds = ChooseTickSeconds(totalSeconds);
+        var tickSeconds = ChooseTickSeconds(totalSeconds, Width);
         for (var seconds = 0d; seconds <= totalSeconds + 0.001; seconds += tickSeconds)
         {
             var x = (float)(seconds / totalSeconds * (Width - 1));
@@ -77,19 +77,27 @@ internal sealed class TimelineRulerControl : Control
         g.DrawString(FormatRulerTime(_duration), Font, textBrush, new RectangleF(Width - 104, labelTop, 104, labelHeight), rightFormat);
     }
 
-    private static double ChooseTickSeconds(double totalSeconds)
+    private static double ChooseTickSeconds(double totalSeconds, int width)
     {
-        if (totalSeconds <= 120)
+        var minLabelSpacing = 92d;
+        var maxLabels = Math.Max(2d, width / minLabelSpacing);
+        var targetSeconds = totalSeconds / maxLabels;
+        double[] intervals =
+        [
+            10, 15, 30,
+            60, 120, 300, 600,
+            900, 1800, 3600,
+        ];
+
+        foreach (var interval in intervals)
         {
-            return 10;
+            if (interval >= targetSeconds)
+            {
+                return interval;
+            }
         }
 
-        if (totalSeconds <= 600)
-        {
-            return 30;
-        }
-
-        return 60;
+        return 7200;
     }
 
     private static string FormatRulerTime(TimeSpan time)

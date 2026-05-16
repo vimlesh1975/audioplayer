@@ -6,6 +6,7 @@ namespace AudioPlayer;
 internal sealed class WaveformControl : Control
 {
     private float[] _peaks = [];
+    private string _emptyText = "Open an audio file";
     private double _progress;
     private bool _dragging;
 
@@ -38,16 +39,22 @@ internal sealed class WaveformControl : Control
         }
     }
 
-    public void SetPeaks(float[] peaks)
+    public void SetPeaks(float[] peaks, bool resetProgress = true)
     {
         _peaks = peaks;
-        _progress = 0;
+        _emptyText = "Open an audio file";
+        if (resetProgress)
+        {
+            _progress = 0;
+        }
+
         Invalidate();
     }
 
-    public void Clear()
+    public void Clear(string emptyText = "Open an audio file")
     {
         _peaks = [];
+        _emptyText = emptyText;
         _progress = 0;
         Invalidate();
     }
@@ -147,10 +154,10 @@ internal sealed class WaveformControl : Control
         SeekRequested?.Invoke(this, value);
     }
 
-    private static void DrawEmptyState(Graphics g, Rectangle bounds)
+    private void DrawEmptyState(Graphics g, Rectangle bounds)
     {
         using var textBrush = new SolidBrush(Color.FromArgb(139, 151, 160));
         using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString("Open an audio file", SystemFonts.MessageBoxFont ?? Control.DefaultFont, textBrush, bounds, format);
+        g.DrawString(_emptyText, SystemFonts.MessageBoxFont ?? Control.DefaultFont, textBrush, bounds, format);
     }
 }
