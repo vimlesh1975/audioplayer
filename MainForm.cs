@@ -2589,11 +2589,11 @@ internal sealed class MainForm : Form
     {
         row.DefaultCellStyle.BackColor = (status, dark) switch
         {
-            ("PLAYING", true) => Color.FromArgb(83, 55, 45),
+            ("PLAYING", true) => Color.FromArgb(32, 113, 73),
             ("NEXT", true) => Color.FromArgb(78, 69, 38),
             ("MISSING", true) => Color.FromArgb(78, 41, 35),
             ("SKIPPED", true) => Color.FromArgb(45, 49, 53),
-            ("PLAYING", false) => Color.FromArgb(255, 224, 218),
+            ("PLAYING", false) => Color.FromArgb(204, 239, 219),
             ("NEXT", false) => Color.FromArgb(255, 242, 204),
             ("MISSING", false) => Color.FromArgb(255, 224, 210),
             ("SKIPPED", false) => Color.FromArgb(226, 230, 234),
@@ -2601,7 +2601,8 @@ internal sealed class MainForm : Form
                 ? row.Index % 2 == 0 ? Color.FromArgb(22, 26, 30) : Color.FromArgb(26, 30, 35)
                 : row.Index % 2 == 0 ? Color.White : Color.FromArgb(240, 244, 247),
         };
-        row.DefaultCellStyle.ForeColor = dark ? Color.FromArgb(231, 236, 239) : Color.FromArgb(25, 31, 36);
+        row.DefaultCellStyle.ForeColor = status == "PLAYING" && dark ? Color.White : dark ? Color.FromArgb(231, 236, 239) : Color.FromArgb(25, 31, 36);
+        row.DefaultCellStyle.SelectionBackColor = dark ? Color.FromArgb(58, 89, 118) : Color.FromArgb(58, 121, 184);
         row.DefaultCellStyle.SelectionForeColor = Color.White;
     }
 
