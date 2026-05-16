@@ -2590,11 +2590,11 @@ internal sealed class MainForm : Form
         row.DefaultCellStyle.BackColor = (status, dark) switch
         {
             ("PLAYING", true) => Color.FromArgb(32, 113, 73),
-            ("NEXT", true) => Color.FromArgb(78, 69, 38),
+            ("NEXT", true) => Color.FromArgb(125, 45, 45),
             ("MISSING", true) => Color.FromArgb(78, 41, 35),
             ("SKIPPED", true) => Color.FromArgb(45, 49, 53),
             ("PLAYING", false) => Color.FromArgb(204, 239, 219),
-            ("NEXT", false) => Color.FromArgb(255, 242, 204),
+            ("NEXT", false) => Color.FromArgb(255, 214, 214),
             ("MISSING", false) => Color.FromArgb(255, 224, 210),
             ("SKIPPED", false) => Color.FromArgb(226, 230, 234),
             _ => dark
