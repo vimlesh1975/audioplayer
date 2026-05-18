@@ -59,8 +59,8 @@ internal sealed class MainForm : Form
     private readonly Label _systemLabel = new();
     private readonly CheckBox _darkModeSwitch = new();
     private readonly Label _fileLabel = new();
-    private readonly Label _timeLabel = new();
-    private readonly Label _largeTimeLabel = new();
+    private readonly Label _timeLabel = new FlickerFreeLabel();
+    private readonly Label _largeTimeLabel = new FlickerFreeLabel();
     private readonly Label _scrubStartLabel = new();
     private readonly Label _scrubDurationLabel = new();
     private readonly Label _statusLabel = new();
@@ -412,8 +412,8 @@ internal sealed class MainForm : Form
 
         _timeLabel.Dock = DockStyle.Fill;
         _timeLabel.TextAlign = ContentAlignment.MiddleCenter;
-        _timeLabel.Text = "00:00.000";
-        _timeLabel.Font = new Font(Font.FontFamily, 14f, FontStyle.Bold);
+        _timeLabel.Text = "00:00:00";
+        _timeLabel.Font = new Font("Consolas", 14f, FontStyle.Bold);
         previewHeader.Controls.Add(_timeLabel, 0, 0);
 
         _fileLabel.AutoEllipsis = true;
@@ -466,8 +466,8 @@ internal sealed class MainForm : Form
 
         _largeTimeLabel.Dock = DockStyle.Fill;
         _largeTimeLabel.TextAlign = ContentAlignment.MiddleCenter;
-        _largeTimeLabel.Font = new Font(Font.FontFamily, 14f, FontStyle.Bold);
-        _largeTimeLabel.Text = "00:00.000";
+        _largeTimeLabel.Font = new Font("Consolas", 14f, FontStyle.Bold);
+        _largeTimeLabel.Text = "00:00:00";
         _largeTimeLabel.Margin = new Padding(0, 4, 0, 4);
         root.Controls.Add(_largeTimeLabel, 0, 2);
 
@@ -650,7 +650,7 @@ internal sealed class MainForm : Form
         _resetSpeedButton.Click += (_, _) => _speedTrackBar.Value = 100;
         _waveform.SeekRequested += (_, progress) => SeekToProgress(progress);
 
-        _positionTimer.Interval = 100;
+        _positionTimer.Interval = 200;
         _positionTimer.Tick += (_, _) => RefreshPosition();
         _audioDeviceBox.SelectedIndexChanged += (_, _) => RestartOnSelectedAudioDevice();
         _volumeBar.ValueChanged += (_, _) =>
@@ -2260,8 +2260,8 @@ internal sealed class MainForm : Form
     {
         if (_reader is null)
         {
-            SetLabelText(_timeLabel, "00:00.000");
-            SetLabelText(_largeTimeLabel, "00:00.000");
+            SetLabelText(_timeLabel, "00:00:00");
+            SetLabelText(_largeTimeLabel, "00:00:00");
             SetLabelText(_scrubStartLabel, "00:00:00.00");
             SetLabelText(_scrubDurationLabel, "00:00:00.00");
             _timelineRuler.Duration = TimeSpan.Zero;
@@ -2278,8 +2278,8 @@ internal sealed class MainForm : Form
             remaining = TimeSpan.Zero;
         }
 
-        SetLabelText(_timeLabel, FormatTime(remaining));
-        SetLabelText(_largeTimeLabel, FormatTime(position));
+        SetLabelText(_timeLabel, FormatDisplayTime(remaining));
+        SetLabelText(_largeTimeLabel, FormatDisplayTime(position));
         SetLabelText(_scrubStartLabel, "00:00:00.00");
         SetLabelText(_scrubDurationLabel, FormatPlaylistTime(duration));
         _timelineRuler.Duration = duration;
@@ -3009,6 +3009,14 @@ internal sealed class MainForm : Form
     {
         var totalMinutes = (int)time.TotalMinutes;
         return $"{totalMinutes:00}:{time.Seconds:00}.{time.Milliseconds:000}";
+    }
+
+    private static string FormatDisplayTime(TimeSpan time)
+    {
+        var rounded = TimeSpan.FromSeconds(Math.Floor(Math.Max(0, time.TotalSeconds)));
+        return rounded.TotalHours >= 1
+            ? $"{(int)rounded.TotalHours:00}:{rounded.Minutes:00}:{rounded.Seconds:00}"
+            : $"00:{(int)rounded.TotalMinutes:00}:{rounded.Seconds:00}";
     }
 
     private static string FormatPlaylistTime(TimeSpan time)
